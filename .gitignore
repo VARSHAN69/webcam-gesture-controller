@@ -1,0 +1,17 @@
+# Python compile cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Large Binary Neural Network Models
+*.task
+hand_landmarker.task
+
+# Environments and user settings
+.venv/
+venv/
+ENV/
+.env
+.vscode/
+.idea/
