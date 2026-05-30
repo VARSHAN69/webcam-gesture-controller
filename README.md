@@ -1,120 +1,85 @@
-# 👁️ CyberHUD: Webcam Gesture Controller
+# Webcam Gesture Controller
 
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg" alt="Python Version" />
-  <img src="https://img.shields.io/badge/MediaPipe-0.10.30%2B-orange.svg" alt="MediaPipe" />
-  <img src="https://img.shields.io/badge/Platform-Windows-brightgreen.svg" alt="Platform" />
-  <img src="https://img.shields.io/badge/License-MIT-lightgrey.svg" alt="License" />
-</p>
+A Python application that uses a standard webcam to track hand gestures in real-time, mapping them to system events such as mouse movement, clicking, scrolling, and volume adjustments. The system uses MediaPipe for hand landmark extraction and OpenCV for a visual HUD feedback loop.
 
-A state-of-the-art, touchless computer vision hand-tracking system that turns real-time spatial gestures into fluent operating system controls. Powered by **Google MediaPipe Tasks (TensorFlow Lite)** and optimized with an **Adaptive Exponential Moving Average (EMA) cursor filter**, CyberHUD provides pixel-perfect mouse navigation, dragging, right-clicking, scrolling, and master volume regulation using a simple webcam.
+It includes an adaptive smoothing filter to eliminate camera coordinate jitter and uses scale-invariant calculations to ensure gestures work consistently regardless of your distance from the camera.
 
----
+## Features
 
-## ⚡ System Architecture Flow
+* **Adaptive Cursor Smoothing**: Uses an Exponential Moving Average (EMA) filter that adjusts its smoothing coefficient dynamically based on hand speed. Slow movements are heavily filtered to allow precise pixel-level clicking, while fast movements have low latency.
+* **Distance-Invariant Calibration**: All gesture thresholds are normalized against the user's palm length (the distance from the wrist to the middle finger knuckle). This calibration prevents coordinate scaling issues when moving closer to or further from the camera.
+* **Continuous Click State Machine**: Pinches map directly to mouse button presses and releases (`mouseDown` and `mouseUp`), enabling native dragging, scrollbar sliding, and drop operations.
+* **Windows Volume Integration**: Interacts directly with the Windows master audio endpoint via `pycaw` for seamless volume control.
+* **Python 3.12+ Compatibility**: Includes a dynamic `ctypes` patch to resolve missing deallocation references in the compiled C++ binaries under newer Python interpreters on Windows.
 
-Here is how CyberHUD processes your spatial coordinates frame-by-frame with low latency:
+## How it Works
 
-```mermaid
-graph TD
-    A[Webcam Video Capture 640x480] --> B[Horizontal Mirror Flip]
-    B --> C[RGB Conversion]
-    C --> D[MediaPipe Tasks HandLandmarker CPU/GPU]
-    D --> E{Hand Detected?}
-    E -- No --> F[Reset Filters & Clicks]
-    E -- Yes --> G[Extract 21 Joint Landmarks & Handedness]
-    G --> H[Calculate Scale-Invariant reference Wrist-to-Knuckle]
-    H --> I[Classify Gesture State & Compute Normalized Coordinates]
-    I --> J{System Paused?}
-    J -- Yes --> K[Lock Controls / Capture Idle State]
-    J -- No --> L[Coordinate Box Clamping & Target Scaling]
-    L --> M[Adaptive EMA Filter Smooth Coordination]
-    M --> N[Trigger OS Actions: pyautogui / pycaw]
-```
+1. **Webcam Pipeline**: The application grabs the camera frames, mirrors them horizontally for a natural user experience, and converts them to RGB.
+2. **Landmark Extraction**: The frame is fed into the MediaPipe HandLandmarker. If a hand is found, the coordinates of its 21 joints are extracted.
+3. **Gesture Classification**: The classifier analyzes relative distances between tips and knuckles to determine the active control state (e.g. mouse mode, scroll mode, or volume adjustment).
+4. **Coordinate Mapping & Smoothing**: The index finger coordinate is mapped from a central bounding box in the camera view to your monitor's full pixel resolution. The coordinate is passed through the adaptive filter before PyAutoGUI moves the OS cursor.
 
----
+## Gesture Reference
 
-## ✨ Features
+| Gesture | Hand Pose | Action |
+| :--- | :--- | :--- |
+| **Move Cursor** | Index finger extended, all other fingers closed. | Moves the cursor inside the screen. |
+| **Left Click / Drag** | Pinch index finger and thumb tip together. | Left click (hold to drag-and-drop). |
+| **Right Click** | Pinch middle finger and thumb tip together. | Triggers system right-click. |
+| **Scroll Page** | Extend index and middle fingers close together. | Move hand up or down to scroll windows. |
+| **Adjust Volume** | Extend index and thumb, close other fingers. | Move fingers closer/wider to change volume. |
+| **System Pause** | Hold a fully open palm steady for 2 seconds. | Toggles gesture processing on or off. |
 
-* **Adaptive Anti-Jitter Filtering**: Uses a velocity-sensitive Exponential Moving Average (EMA) filter. Heavy smoothing eliminates sensor jitter while hovering, and zero-lag response opens up during fast sweeps.
-* **Scale-Invariant Interaction**: All distance thresholds (pinches, open hand triggers) are divided by a physical hand reference length (Wrist to Middle Knuckle). The system remains **100% accurate** whether you sit close to or far from your camera.
-* **Futuristic Neon HUD Overlay**: OpenCV-based cyberpunk heads-up display showing dynamic tracking bounds, customized joint skeleton connectors, expanding click ripples, and interactive volume bars.
-* **Drag-and-Drop Capability**: Our click state machine maps pinch-start to `mouseDown` and pinch-release to `mouseUp`. You can comfortably pinch-hold, drag folders or browser scrollbars, and release to drop.
-* **Dynamic COM Monkeypatch**: Bundles a dynamic `ctypes` patching hook making the MediaPipe TensorFlow bindings completely compatible under Python 3.12, 3.13, and 3.14 on Windows.
+## Installation
 
----
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/VARSHAN69/webcam-gesture-controller.git
+   cd webcam-gesture-controller
+   ```
 
-## 🖐️ Gesture Vocabulary
+2. Install the required Python packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-| Gesture | Finger Layout | System Trigger | Cyber-HUD Overlay |
-| :--- | :--- | :--- | :--- |
-| **Cursor Hover** | **Index finger UP**, other fingers folded. | Smooth cursor tracking inside the central active bounds. | Cyan glowing crosshair tracking fingertip. |
-| **Left Click / Drag** | **Pinch Thumb + Index tip** (in Cursor Mode). | Left-click down (pinch-hold to drag-and-drop folders/windows). | Expanding Cyan ripple from pinch location. |
-| **Right Click** | **Pinch Thumb + Middle tip** (in Cursor Mode). | Contextual Right-Click click. | Expanding Magenta ripple from pinch location. |
-| **Page Scroll** | **Index & Middle UP & Close**, others folded. | Vertical hand displacement scrolls pages smoothly. | Dual vertical scroll arrows. |
-| **Volume Control** | **Index & Thumb open**, others folded. | Pinch/unpinch distance regulates master system volume. | Interactive vertical HUD progress bar & % read-out. |
-| **Pause / Resume** | **Fully Open Palm** held steady for 2.0s. | Toggles gesture control ON/OFF (safety idle lock). | Circular countdown timer panel in center of HUD. |
+3. Run the controller:
+   ```bash
+   python main.py
+   ```
 
----
+## Configuration and Usage
 
-## 🛠️ Installation & Setup
+The controller can be started with command-line arguments to adjust settings:
 
-> [!IMPORTANT]
-> **Windows OS Integration**
-> Master volume binding relies on Windows Core Audio APIs (`pycaw`). For mouse navigation, the system uses cross-platform emulation via `pyautogui`.
+* **Sensitivity**: Multiply the mouse scroll and cursor speed (default is 1.0):
+  ```bash
+  python main.py --sensitivity 1.5
+  ```
+* **Camera Index**: Specify a different camera (default is 0 for built-in webcams):
+  ```bash
+  python main.py --camera 1
+  ```
+* **Disable Volume Mixer**: Bypass the Windows audio mixer endpoint:
+  ```bash
+  python main.py --no-volume
+  ```
 
-### 1. Clone & Navigate
-```powershell
-git clone https://github.com/VARSHAN69/webcam-gesture-controller.git
-cd webcam-gesture-controller
-```
+### Controls
 
-### 2. Install Dependencies
-```powershell
-pip install -r requirements.txt
-```
+* **Pause / Resume**: Hold your hand fully open for 2 seconds to temporarily lock the controller (useful if you want to use your hands for something else without moving the mouse). Repeat the gesture to unlock.
+* **Exit**: Select the active camera window and press **ESC** or **Q** on your keyboard to close the streams and release system resources.
+* **Emergency Abort**: If the cursor becomes uncontrollable, violently move your physical mouse or guide the cursor to any of the four corners of your monitor to trigger the PyAutoGUI fail-safe and abort the script.
 
-### 3. Launch the Application
-Run the main script with your default webcam (Index 0):
-```powershell
-python main.py
-```
+## Project Structure
 
----
+* `config.py` — Calibration margins, color settings, and active zone bounds.
+* `filters.py` — The velocity-sensitive `AdaptiveEMAFilter` implementation.
+* `gestures.py` — Hand geometry parsing and scale-invariant calculations.
+* `controller.py` — The core loop, OpenCV HUD rendering, and Windows OS bindings.
+* `patch.py` — The ctypes monkeypatch for Python 3.12+ compatibility on Windows.
+* `main.py` — CLI entrypoint and exception handler.
 
-## ⚙️ Advanced CLI Options
+## License
 
-CyberHUD exposes command-line arguments to quickly configure your physical setup:
-
-```powershell
-# Increase speed/sensitivity of cursor movements
-python main.py --sensitivity 1.5
-
-# Connect to an external USB camera (Camera index 1)
-python main.py --camera 1
-
-# Launch with Windows Master Volume control disabled
-python main.py --no-volume
-```
-
----
-
-## ⚠️ Safety Fail-Safe (Emergency Abort)
-
-The application implements PyAutoGUI's **FAILSAFE** feature. If your mouse cursor behaves erratically or gets locked in a click-state, **violently sweep your physical mouse or your hand-guided cursor to any of the four corners of your monitor**. This immediately aborts the script execution and restores regular operating system controls.
-
----
-
-## 📜 Modular File Breakdown
-
-* `config.py` — Contains coordinate tracking margins, scale thresholds, BGR colors, and visual styles.
-* `filters.py` — Implements the velocity-sensitive `AdaptiveEMAFilter` for smooth coordinates.
-* `gestures.py` — Classifies hand landmark geometry into gestures with scale-invariant ratios.
-* `controller.py` — Manages webcam frame capturing, overlays custom skeleton drawings, and coordinates system APIs.
-* `patch.py` — Monkeypatches `ctypes.CDLL` to ensure DLL compatibility on Windows under Python 3.12+.
-* `main.py` — Standard CLI command handler and runtime entrypoint.
-
----
-
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
