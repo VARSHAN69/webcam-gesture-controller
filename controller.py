@@ -6,6 +6,7 @@ import pyautogui
 import os
 import urllib.request
 import mediapipe as mp
+import config
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from comtypes import CoInitialize, CoUninitialize
@@ -168,7 +169,7 @@ class GestureController:
                     handedness = results.handedness[idx][0].category_name
                     
                     # Classify gesture for this hand
-                    gesture, val = self.classifier.classify(landmarks, handedness, self)
+                    gesture, val = self.classifier.classify(landmarks, handedness, config)
                     
                     # Capture gesture label for HUD overlay panel
                     if handedness == "Left": # Right hand takes HUD label precedence
