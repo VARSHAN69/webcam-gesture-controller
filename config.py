@@ -30,12 +30,20 @@ MOUSE_DRAG_SPEED = 0.0  # Instantaneous movement to avoid queue build-up
 PYAUTOGUI_PAUSE = 0.001  # Tiny pause to let OS process events
 
 # ==========================================
-# Gesture Thresholds (Scale-Invariant)
+# Gesture Thresholds & Timing (Scale-Invariant)
 # ==========================================
 # Distances will be normalized by palm length (distance between wrist [0] and middle finger MCP [9])
 PINCH_CLICK_THRESHOLD = 0.22       # Distance between index tip (4) and thumb tip (8)
 PINCH_RIGHT_CLICK_THRESHOLD = 0.22 # Distance between middle tip (4) and thumb tip (12)
 PAUSE_GESTURE_TIME = 2.0           # Seconds of steady open hand to pause/resume controller
+DOUBLE_CLICK_WINDOW = 0.35         # Seconds to detect rapid double pinches
+HOTKEY_COOLDOWN = 1.2              # Cooldown period (seconds) for keyboard bindings
+
+# Mouse Acceleration Curve Settings
+ACCEL_SPEED_MIN = 3.0              # Speed threshold (pixels/frame) below which sensitivity is halved
+ACCEL_SPEED_MAX = 28.0             # Speed threshold above which sensitivity is doubled
+ACCEL_MIN_MULTIPLIER = 0.5         # Slow movement dampener for high-accuracy targeting
+ACCEL_MAX_MULTIPLIER = 2.2         # Fast sweep multiplier for swift navigation
 
 # ==========================================
 # Neon UI Styling (BGR Color Space)

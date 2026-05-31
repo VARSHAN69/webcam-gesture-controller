@@ -68,6 +68,22 @@ class GestureClassifier:
         self.open_palm_start_time = None
 
         # ==========================================
+        # GESTURE 1.5: Media Key Shortcuts (OK, Fist, Thumbs Up)
+        # ==========================================
+        # OK Gesture: Index pinches Thumb, but Middle, Ring, and Pinky are fully OPEN.
+        if middle_open and ring_open and pinky_open and thumb_index_dist < config.PINCH_CLICK_THRESHOLD:
+            return "KEY_OK", thumb_index_dist
+
+        # Fist Gesture: All fingers closed, including thumb.
+        if not index_open and not middle_open and not ring_open and not pinky_open and not thumb_open:
+            return "KEY_FIST", 0.0
+
+        # Thumbs Up Gesture: Only thumb is open, and is pointing upwards (tip Y < base CMC Y).
+        if thumb_open and not index_open and not middle_open and not ring_open and not pinky_open:
+            if landmarks[4].y < landmarks[2].y:
+                return "KEY_THUMBS_UP", 0.0
+
+        # ==========================================
         # GESTURE 2: Volume Control Mode
         # ==========================================
         # Gesture: Thumb and Index finger are open/extended, while Middle, Ring, Pinky are closed.

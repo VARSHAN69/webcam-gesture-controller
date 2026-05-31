@@ -50,6 +50,11 @@ class GestureController:
         self.left_pressed = False
         self.right_pressed = False
         
+        # Timing trackers for upgrades
+        self.last_left_click_time = 0.0
+        self.last_hotkey_time = 0.0
+        self.last_hotkey_pressed = None
+        
         # Scroll tracking
         self.prev_scroll_y = None
         
@@ -65,11 +70,11 @@ class GestureController:
                 print(f"[Error] Failed to download MediaPipe model: {e}")
                 raise e
 
-        # Initialize MediaPipe Tasks HandLandmarker
+        # Initialize MediaPipe Tasks HandLandmarker with 2 hands support
         base_options = python.BaseOptions(model_asset_path=self.model_path)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
-            num_hands=1,
+            num_hands=2,
             min_hand_detection_confidence=0.35,
             min_hand_presence_confidence=0.35,
             min_tracking_confidence=0.35,
@@ -144,7 +149,7 @@ class GestureController:
             frame = cv2.flip(frame, 1)
             h, w, _ = frame.shape
 
-            # 2. Process Hand landmarks using Tasks API
+            # 2. Process Hand landmarks using Tasks API (multi-hand tracking)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
             results = self.detector.detect(mp_image)
@@ -152,55 +157,70 @@ class GestureController:
             # Draw static HUD framework
             self._draw_hud_base(frame, w, h)
 
-            gesture = "IDLE"
+            gesture_for_hud = "IDLE"
             hand_found = False
 
             if results.hand_landmarks and results.handedness:
                 hand_found = True
-                landmarks = results.hand_landmarks[0]
-                handedness = results.handedness[0][0].category_name
                 
-                # Classify the active gesture
-                gesture, val = self.classifier.classify(landmarks, handedness, self)
+                # Loop through all detected hands (supports up to 2)
+                for idx, landmarks in enumerate(results.hand_landmarks):
+                    handedness = results.handedness[idx][0].category_name
+                    
+                    # Classify gesture for this hand
+                    gesture, val = self.classifier.classify(landmarks, handedness, self)
+                    
+                    # Capture gesture label for HUD overlay panel
+                    if handedness == "Left": # Right hand takes HUD label precedence
+                        gesture_for_hud = gesture
+                    elif gesture_for_hud == "IDLE":
+                        gesture_for_hud = gesture
 
-                # Check for system pause toggle (open palm held for 2 seconds)
-                toggled, held_dur = self.classifier.check_pause_toggle(gesture)
-                if toggled:
-                    # Clear states on toggle
-                    self._release_all_clicks()
-                    self.filter.reset()
-                    self.prev_scroll_y = None
-                    self.ripples.append({
-                        "pos": (w // 2, h // 2),
-                        "radius": 10,
-                        "color": COLOR_NEON_GREEN if self.classifier.last_state == "ACTIVE" else COLOR_RED,
-                        "max_radius": 150,
-                        "thickness": 6
-                    })
+                    # Check for system pause toggle (open palm held for 2 seconds)
+                    toggled, held_dur = self.classifier.check_pause_toggle(gesture)
+                    if toggled:
+                        self._release_all_clicks()
+                        self.filter.reset()
+                        self.prev_scroll_y = None
+                        self.last_hotkey_pressed = None
+                        self.ripples.append({
+                            "pos": (w // 2, h // 2),
+                            "radius": 10,
+                            "color": COLOR_NEON_GREEN if self.classifier.last_state == "ACTIVE" else COLOR_RED,
+                            "max_radius": 150,
+                            "thickness": 6
+                        })
 
-                # Visual feedback for pause countdown
-                if gesture == "PAUSE_TRIGGER" and held_dur > 0.1:
-                    pct = min(held_dur / 2.0, 1.0)
-                    self._draw_countdown(frame, w, h, pct)
+                    # Visual feedback for pause countdown
+                    if gesture == "PAUSE_TRIGGER" and held_dur > 0.1:
+                        pct = min(held_dur / 2.0, 1.0)
+                        self._draw_countdown(frame, w, h, pct)
 
-                # If controller is active, perform system controls
-                if self.classifier.last_state == "ACTIVE":
-                    self._execute_system_actions(frame, landmarks, gesture, val, w, h)
-                
-                # Render skeletal structure on hand
-                self._draw_skeleton(frame, landmarks)
+                    # If controller is active, perform system controls
+                    if self.classifier.last_state == "ACTIVE":
+                        # Dual Hand Role Routing:
+                        # Mirrored "Left" hand is physical Right Hand (Absolute Cursor Tracking & Clicking)
+                        if handedness == "Left":
+                            self._execute_right_hand_actions(frame, landmarks, gesture, val, w, h)
+                        # Mirrored "Right" hand is physical Left Hand (Scrolling, Volume, & Key Bindings)
+                        elif handedness == "Right":
+                            self._execute_left_hand_actions(frame, landmarks, gesture, val, w, h)
+                    
+                    # Render skeletal structure on hand with handedness label
+                    self._draw_skeleton(frame, landmarks, handedness)
             else:
-                # No hand detected: reset states, damp filters
+                # No hand detected: reset states, damp filters, and hotkeys
                 self._release_all_clicks()
                 self.filter.reset()
                 self.prev_scroll_y = None
                 self.classifier.open_palm_start_time = None
+                self.last_hotkey_pressed = None
 
             # Render active ripples and animations
             self._draw_ripples(frame)
 
             # Render headers and status panels
-            self._draw_hud_panels(frame, w, h, hand_found, gesture)
+            self._draw_hud_panels(frame, w, h, hand_found, gesture_for_hud)
 
             # Show frame
             cv2.imshow("Webcam Gesture Controller (HUD)", frame)
@@ -215,17 +235,12 @@ class GestureController:
         cap.release()
         cv2.destroyAllWindows()
 
-    def _execute_system_actions(self, frame, landmarks, gesture, val, w, h):
-        """Map classified gestures to real-time OS input events."""
-        
-        # 1. CURSOR NAVIGATION MODE
+    def _execute_right_hand_actions(self, frame, landmarks, gesture, val, w, h):
+        """Map physical Right Hand (mirrored 'Left') to cursor movement, clicking, and double-clicking."""
         if gesture in ["CURSOR", "CLICK_LEFT", "CLICK_RIGHT"]:
             # Use Index Tip (landmark 8) for cursor positioning
             index_tip = landmarks[8]
-            
-            # Map index coordinates to the central Active Region box
-            raw_x = index_tip.x
-            raw_y = index_tip.y
+            raw_x, raw_y = index_tip.x, index_tip.y
 
             # Clamp coordinates to Active Tracking Zone
             x_clamped = max(ACTIVE_ZONE_LEFT, min(ACTIVE_ZONE_RIGHT, raw_x))
@@ -239,6 +254,27 @@ class GestureController:
             screen_x = int(x_scaled * self.screen_width)
             screen_y = int(y_scaled * self.screen_height)
 
+            # Apply MOUSE ACCELERATION
+            if self.filter.prev_x is not None and self.filter.prev_y is not None:
+                dx = screen_x - self.filter.prev_x
+                dy = screen_y - self.filter.prev_y
+                velocity = np.hypot(dx, dy)
+                
+                from config import ACCEL_SPEED_MIN, ACCEL_SPEED_MAX, ACCEL_MIN_MULTIPLIER, ACCEL_MAX_MULTIPLIER
+                
+                # Dynamic sensitivity based on velocity
+                if velocity <= ACCEL_SPEED_MIN:
+                    accel_multiplier = ACCEL_MIN_MULTIPLIER
+                elif velocity >= ACCEL_SPEED_MAX:
+                    accel_multiplier = ACCEL_MAX_MULTIPLIER
+                else:
+                    ratio = (velocity - ACCEL_SPEED_MIN) / (ACCEL_SPEED_MAX - ACCEL_SPEED_MIN)
+                    accel_multiplier = ACCEL_MIN_MULTIPLIER + (ACCEL_MAX_MULTIPLIER - ACCEL_MIN_MULTIPLIER) * ratio
+                
+                # Apply acceleration scale to raw coordinate displacements
+                screen_x = int(self.filter.prev_x + dx * accel_multiplier * self.sensitivity)
+                screen_y = int(self.filter.prev_y + dy * accel_multiplier * self.sensitivity)
+
             # Smooth cursor position using adaptive EMA filter
             smooth_x, smooth_y = self.filter.filter(screen_x, screen_y)
 
@@ -246,25 +282,33 @@ class GestureController:
             try:
                 pyautogui.moveTo(smooth_x, smooth_y, duration=0)
             except Exception:
-                pass  # Ignore boundary errors
+                pass
 
             # Render tracking crosshair in active camera view
             cam_x = int(x_clamped * w)
             cam_y = int(y_clamped * h)
             self._draw_crosshair(frame, cam_x, cam_y, gesture)
 
-        # 2. CLICK INTERACTION STATE MACHINE
-        # Left Click Pinch (Thumb + Index)
+        # Left Click State Machine with DOUBLE-CLICK timing engine
         if gesture == "CLICK_LEFT":
             if not self.left_pressed:
-                # Rising Edge: Trigger Mouse Down (enables dragging!)
-                try:
-                    pyautogui.mouseDown()
-                except Exception:
-                    pass
+                from config import DOUBLE_CLICK_WINDOW
+                curr_time = time.time()
+                # If double click timing matches, trigger double click natively
+                if curr_time - self.last_left_click_time < DOUBLE_CLICK_WINDOW:
+                    try:
+                        pyautogui.doubleClick()
+                    except Exception:
+                        pass
+                    self.last_left_click_time = 0.0  # Reset
+                else:
+                    try:
+                        pyautogui.mouseDown()
+                    except Exception:
+                        pass
+                    self.last_left_click_time = curr_time
                 self.left_pressed = True
                 
-                # Render interactive click ripple at index finger coordinates
                 idx_cam_x = int(landmarks[8].x * w)
                 idx_cam_y = int(landmarks[8].y * h)
                 self.ripples.append({
@@ -276,24 +320,21 @@ class GestureController:
                 })
         else:
             if self.left_pressed:
-                # Falling Edge: Trigger Mouse Up (ends drag/pinch)
                 try:
                     pyautogui.mouseUp()
                 except Exception:
                     pass
                 self.left_pressed = False
 
-        # Right Click Pinch (Thumb + Middle)
+        # Right Click State Machine
         if gesture == "CLICK_RIGHT":
             if not self.right_pressed:
-                # Click once on rising edge
                 try:
                     pyautogui.rightClick()
                 except Exception:
                     pass
                 self.right_pressed = True
                 
-                # Render click ripple at middle finger coordinates
                 mid_cam_x = int(landmarks[12].x * w)
                 mid_cam_y = int(landmarks[12].y * h)
                 self.ripples.append({
@@ -306,53 +347,79 @@ class GestureController:
         else:
             self.right_pressed = False
 
-        # 3. WEBPAGE SCROLL MODE
+    def _execute_left_hand_actions(self, frame, landmarks, gesture, val, w, h):
+        """Map physical Left Hand (mirrored 'Right') to scrolling, volume, and media keyboard hotkeys."""
+        
+        # 1. SCROLL MODE
         if gesture == "SCROLL":
-            # Track average vertical movement of Index (8) and Middle (12) tips
             avg_y = (landmarks[8].y + landmarks[12].y) / 2.0
-            
             if self.prev_scroll_y is not None:
-                # Compute displacement
                 dy = avg_y - self.prev_scroll_y
-                
-                # We scroll if movement exceeds a minor threshold to avoid micro-scroll jitter
                 if abs(dy) > 0.007:
-                    # Scale scrolling speed based on pixel displacement
                     scroll_amount = int(-dy * 5000 * self.sensitivity)
                     if scroll_amount != 0:
                         try:
                             pyautogui.scroll(scroll_amount)
                         except Exception:
                             pass
-            
             self.prev_scroll_y = avg_y
-            
-            # Draw scroll-HUD pointer overlay
             sc_x = int(landmarks[8].x * w)
             sc_y = int(avg_y * h)
             self._draw_scroll_arrows(frame, sc_x, sc_y)
         else:
             self.prev_scroll_y = None
 
-        # 4. SYSTEM VOLUME CONTROL MODE
+        # 2. VOLUME CONTROL MODE
         if gesture == "VOLUME" and self.volume_control:
-            # Scale-invariant pinch value: thumb tip (4) to index tip (8) distance.
-            # Usually ranges from ~0.15 (fully pinched) to ~0.70 (fully stretched).
             pinch_dist = val
-            
-            # Clamp and normalize percentage
             min_val, max_val = 0.15, 0.65
             normalized = max(0.0, min(1.0, (pinch_dist - min_val) / (max_val - min_val)))
-            
-            # Apply volume scaling to Windows Audio Endpoint
             try:
                 self.volume_control.SetMasterVolumeLevelScalar(normalized, None)
             except Exception:
                 pass
-
-            # Render volume adjustment HUD
             vol_pct = int(normalized * 100)
             self._draw_volume_panel(frame, w, h, vol_pct, landmarks)
+
+        # 3. KEYBOARD HOTKEYS & BINDINGS (Fist, Thumbs Up, OK Sign)
+        from config import HOTKEY_COOLDOWN
+        current_time = time.time()
+        
+        if gesture in ["KEY_FIST", "KEY_THUMBS_UP", "KEY_OK"]:
+            # Check cooldown and ensure it is a new gesture (rising edge) to prevent repeating
+            if (current_time - self.last_hotkey_time > HOTKEY_COOLDOWN) and (self.last_hotkey_pressed != gesture):
+                if gesture == "KEY_FIST":
+                    try:
+                        pyautogui.press("playpause")
+                        print("[OS Hotkey] Play/Pause media triggered")
+                    except Exception:
+                        pass
+                elif gesture == "KEY_THUMBS_UP":
+                    try:
+                        pyautogui.press("volumemute")
+                        print("[OS Hotkey] Volume Mute toggled")
+                    except Exception:
+                        pass
+                elif gesture == "KEY_OK":
+                    try:
+                        pyautogui.hotkey("win", "d")
+                        print("[OS Hotkey] Show Desktop triggered")
+                    except Exception:
+                        pass
+                
+                self.last_hotkey_time = current_time
+                self.last_hotkey_pressed = gesture
+                
+                # Draw high-contrast trigger ring at the wrist
+                self.ripples.append({
+                    "pos": (int(landmarks[0].x * w), int(landmarks[0].y * h)),
+                    "radius": 15,
+                    "color": COLOR_MAGENTA if gesture == "KEY_OK" else COLOR_NEON_GREEN,
+                    "max_radius": 90,
+                    "thickness": 5
+                })
+        else:
+            self.last_hotkey_pressed = None
 
     def _release_all_clicks(self):
         """Release mouse buttons safely to prevent locking the OS interface."""
@@ -440,7 +507,7 @@ class GestureController:
         help_text = "[ESC/Q] Close Window | [Pinch-Hold] Drag-and-Drop | [Open Palm] Lock/Unlock"
         cv2.putText(frame, help_text, (20, h - 10), FONT_HUD, 0.4, COLOR_WHITE, 1, cv2.LINE_AA)
 
-    def _draw_skeleton(self, frame, landmarks):
+    def _draw_skeleton(self, frame, landmarks, handedness=None):
         """Draws a premium styled cyan neon hand skeleton overlay with glowing joints."""
         h, w, _ = frame.shape
         
@@ -474,6 +541,14 @@ class GestureController:
             else:
                 cv2.circle(frame, (cx, cy), 4, COLOR_CYAN, -1)
                 cv2.circle(frame, (cx, cy), 5, COLOR_WHITE, 1)
+
+        # Draw physical hand label near wrist
+        if handedness:
+            hand_label = "RIGHT HAND" if handedness == "Left" else "LEFT HAND"
+            label_color = COLOR_CYAN if handedness == "Left" else COLOR_MAGENTA
+            wx = int(landmarks[0].x * w)
+            wy = int(landmarks[0].y * h) + 20
+            cv2.putText(frame, hand_label, (wx - 35, wy), FONT_HUD, 0.4, label_color, 1, cv2.LINE_AA)
 
     def _draw_crosshair(self, frame, cx, cy, gesture):
         """Draws a cybernetic crosshair HUD at the active finger tracking position."""
