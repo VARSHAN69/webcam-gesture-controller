@@ -142,3 +142,58 @@ class GestureClassifier:
         else:
             self.open_palm_start_time = None
             return False, 0.0
+
+    @staticmethod
+    def get_joint_embedding(landmarks):
+        """
+        Extracts a 63-dimensional translation and scale invariant feature vector
+        from the 21 hand landmarks.
+        """
+        # Wrist is the translation origin
+        wrist = landmarks[0]
+        
+        # Calculate palm scale reference (Wrist to Middle Knuckle)
+        palm_scale = GestureClassifier.get_distance(landmarks[0], landmarks[9])
+        if palm_scale == 0:
+            palm_scale = 0.001
+
+        embedding = []
+        # Subtract wrist coordinates and normalize by palm scale for all 21 landmarks
+        for lm in landmarks:
+            dx = (lm.x - wrist.x) / palm_scale
+            dy = (lm.y - wrist.y) / palm_scale
+            dz = (lm.z - wrist.z) / palm_scale
+            embedding.extend([dx, dy, dz])
+            
+        return embedding
+
+    def classify_custom_gesture(self, landmarks, db_samples, threshold):
+        """
+        Compares the current hand embedding against the database of custom gestures
+        using Euclidean distance (K-Nearest Neighbors, K=1).
+        Returns the matched gesture label (str) if within the distance threshold, else None.
+        """
+        if not db_samples:
+            return None, 0.0
+            
+        # Get current 63D embedding
+        current_embedding = np.array(self.get_joint_embedding(landmarks))
+        
+        best_match = None
+        min_distance = float('inf')
+        
+        for sample in db_samples:
+            sample_embedding = np.array(sample["embedding"])
+            
+            # Compute Euclidean distance
+            distance = np.linalg.norm(current_embedding - sample_embedding)
+            
+            if distance < min_distance:
+                min_distance = distance
+                best_match = sample
+                
+        # If the closest neighbor is within the classification threshold, we have an AI match!
+        if min_distance < threshold:
+            return best_match["label"], min_distance
+            
+        return None, min_distance

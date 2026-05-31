@@ -1,28 +1,47 @@
 # Webcam Gesture Controller Walkthrough
 
-Welcome to the upgraded **Webcam Gesture Controller**! This real-time computer vision application tracks up to **two hands concurrently**, mapping intuitive spatial gestures to operating system events (mouse navigation, clicking, double-clicking, scrolling, volume control, and keyboard media shortcuts).
+Welcome to the upgraded **Webcam Gesture Controller**! This real-time computer vision application tracks up to **two hands concurrently**, mapping intuitive spatial gestures and custom-trained AI shapes to operating system events (mouse navigation, clicking, double-clicking, scrolling, volume control, and custom shell command execution).
 
 To prevent tracking interference, the application separates controls into distinct **hand-specific profiles**:
 1. **Right Hand Profile**: Absolute cursor navigation, single clicks, dragging, and double-clicks.
-2. **Left Hand Profile**: Window scrolling, master system volume adjustments, and media/presentation hotkeys.
+2. **Left Hand Profile**: Window scrolling, master system volume adjustments, standard keyboard media shortcuts, and custom-trained **Local AI gesture command triggers**!
 
 ---
 
 ## Workspace Files
 
 * [requirements.txt](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/requirements.txt): Third-party libraries (`mediapipe`, `opencv-python`, `pyautogui`, `pycaw`, `numpy`, `comtypes`).
-* [config.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/config.py): Contains active zone bounds, double-click timing windows, hotkey cooldowns, speed-acceleration thresholds, and neon HUD BGR colors.
+* [config.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/config.py): Contains active zone bounds, double-click timing windows, hotkey cooldowns, speed-acceleration thresholds, local gestures database filename (`custom_gestures.json`), matching tolerance thresholds (`0.65`), and HUD BGR colors.
 * [filters.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/filters.py): Implements the `AdaptiveEMAFilter` that eliminates coordinate tremors.
-* [gestures.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/gestures.py): Geometry engine to classify hand positions (including Fist, Thumbs-up, and OK signs).
-* [controller.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/controller.py): Visualizes dual-hand skeletons, maps Right/Left hand coordinate pipelines, applies mouse acceleration, and executes system triggers.
+* [gestures.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/gestures.py): Geometry engine to classify hand positions (including Fist, Thumbs-up, OK sign, 63D spatial embedding extraction, and KNN Euclidean classification).
+* [controller.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/controller.py): Visualizes dual-hand skeletons, maps Right/Left hand coordinate pipelines, manages the on-the-fly **`T`** key AI training handler, runs the live KNN matching loops, and executes system triggers.
 * [patch.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/patch.py): Monkeypatch utility ensuring compatibility with Python 3.12+ / 3.13 / 3.14 on Windows.
 * [main.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/main.py): Clean command-line CLI tool.
 
 ---
 
-## 🖐️ Hand-Specific Gesture Vocabulary
+## 🤖 Dynamic Local AI Gesture Classifier
 
-To ensure scale-invariance, all gesture threshold distances are divided by a reference palm size (the distance from the Wrist [0] to the Middle Knuckle [9]).
+In addition to standard hardcoded poses, CyberHUD includes a **local K-Nearest Neighbors (KNN) Machine Learning classifier** running on-device. You can train new hand shapes on-the-fly, assign a name, and bind them to any operating system command.
+
+### How it Works (The Math)
+1. **Spatial Embedding ($E \in \mathbb{R}^{63}$)**: Subtracted Wrist coordinates $(x_0, y_0, z_0)$ from all 21 hand joints to ensure *position translation invariance*. Then, divided the coordinates by the palm scale (Wrist-to-Middle-Knuckle distance) to ensure *scale invariance*. This forms a flat 63-dimensional coordinate array representing a unique "pose signature" immune to distance or orientation.
+2. **Euclidean Distance Classification**: When your Left Hand is detected, the classifier calculates the mathematical Euclidean distance against all saved templates:
+   $$D = \sqrt{\sum_{i=1}^{63} (C_i - T_i)^2}$$
+   If the closest distance is below our tolerance threshold (`0.65`), it identifies the custom hand shape.
+
+### How to Train Poses
+1. Run the controller: `python main.py`
+2. Hold your Left Hand in a custom pose (e.g. "Peace Sign", "Hang Loose", or "Spiderman Web Sign").
+3. Press **`T`** on your keyboard. The camera feed will freeze, and the console will prompt you:
+   * **Gesture Name**: Type a short name (e.g. `YOUTUBE` or `CALC`).
+   * **Action Command**: Type a shell command or URL (e.g. `start https://youtube.com` to open a web page, or `calc.exe` to launch the calculator). Leave blank for a visual HUD-only pose tag.
+4. Press **Enter**. The pose is instantly saved in `custom_gestures.json`, the database reloads, and the tracking feed resumes.
+5. Form that same shape again with your Left Hand to trigger your action!
+
+---
+
+## 🖐️ Hand-Specific Gesture Vocabulary
 
 ### 1. Right Hand Controls (Mirrored as "Left Hand" in feed)
 *Handles cursor guidance, clicks, and window dragging.*
@@ -35,7 +54,7 @@ To ensure scale-invariance, all gesture threshold distances are divided by a ref
 | **Double Click** | **Double Pinch Index + Thumb** within `0.35s`. | Triggers a native OS double-click. | Two rapid Cyan ripples. |
 
 ### 2. Left Hand Controls (Mirrored as "Right Hand" in feed)
-*Handles scrolling, volume, and presentation shortcuts without displacing your cursor.*
+*Handles scrolling, volume, standard media triggers, and your custom AI commands.*
 
 | Gesture | Hand Pose | OS Interaction | Cyber-HUD Overlay |
 | :--- | :--- | :--- | :--- |
@@ -44,9 +63,7 @@ To ensure scale-invariance, all gesture threshold distances are divided by a ref
 | **Play / Pause** | **Fist Gesture** (all fingers and thumb closed). | Presses keyboard `playpause` key (1.2s cooldown). | Medium glowing green ring. |
 | **Volume Mute** | **Thumbs Up** (vertical thumb extended, others closed). | Toggles master audio mute state (`volumemute`). | Medium glowing green ring. |
 | **Show Desktop** | **OK Sign** (Index + Thumb pinch, other fingers open). | Minimizes all active windows (`Win + D` hotkey). | Medium glowing magenta ring. |
-
-### 3. Safety Lock (Any Hand)
-* **Pause / Resume**: Hold a **Fully Open Palm** steady for 2.0 seconds to toggle the controller state. A circular locks progress countdown is drawn on-screen.
+| **AI Custom Match** | **Your Custom Gesture** trained via `T` key. | Runs custom URL/command asynchronously. | Glowing neon WRIST label: `AI MATCH: NAME`. |
 
 ---
 

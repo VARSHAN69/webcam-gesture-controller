@@ -46,6 +46,12 @@ ACCEL_MIN_MULTIPLIER = 0.5         # Slow movement dampener for high-accuracy ta
 ACCEL_MAX_MULTIPLIER = 2.2         # Fast sweep multiplier for swift navigation
 
 # ==========================================
+# Local AI Classifier Properties
+# ==========================================
+CUSTOM_GESTURES_DB = "custom_gestures.json"
+AI_CLASSIFY_THRESHOLD = 0.65       # Maximum Euclidean spatial distance for a successful classification match
+
+# ==========================================
 # Neon UI Styling (BGR Color Space)
 # ==========================================
 # Pure neon colors for the premium HUD visual experience

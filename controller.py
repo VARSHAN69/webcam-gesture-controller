@@ -4,6 +4,8 @@ import time
 import numpy as np
 import pyautogui
 import os
+import json
+import subprocess
 import urllib.request
 import mediapipe as mp
 import config
@@ -55,6 +57,17 @@ class GestureController:
         self.last_left_click_time = 0.0
         self.last_hotkey_time = 0.0
         self.last_hotkey_pressed = None
+        
+        # Load local custom AI gestures database
+        from config import CUSTOM_GESTURES_DB
+        self.custom_gestures = []
+        if os.path.exists(CUSTOM_GESTURES_DB):
+            try:
+                with open(CUSTOM_GESTURES_DB, "r") as f:
+                    self.custom_gestures = json.load(f)
+                print(f"[System] Loaded {len(self.custom_gestures)} custom AI gestures.")
+            except Exception as e:
+                print(f"[Warning] Failed to load custom gestures database: {e}")
         
         # Scroll tracking
         self.prev_scroll_y = None
@@ -228,6 +241,61 @@ class GestureController:
 
             # Exit criteria
             key = cv2.waitKey(1) & 0xFF
+            
+            # AI Gesture Training Trigger
+            if key == ord('t') or key == ord('T'):
+                if hand_found and results.hand_landmarks:
+                    print("\n" + "=" * 60)
+                    print("        🤖  LOCAL AI CUSTOM GESTURE TRAINER  🤖")
+                    print("=" * 60)
+                    print("  Hold your hand steady in your custom pose shape.")
+                    
+                    try:
+                        # Grab the first hand detected
+                        train_hand = results.hand_landmarks[0]
+                        
+                        label = input("  1. Enter a unique name for this gesture (e.g. SPIDERMAN): ").strip().upper()
+                        if not label:
+                            print("  [Error] Gesture name cannot be empty. Training aborted.")
+                            print("=" * 60 + "\n")
+                            continue
+                            
+                        cmd = input("  2. Enter shell command/URL to run (leave empty for HUD-only): ").strip()
+                        
+                        # Get 63D embedding spatial signature
+                        embedding = self.classifier.get_joint_embedding(train_hand)
+                        
+                        # Append and save to local JSON
+                        new_sample = {
+                            "label": label,
+                            "command": cmd,
+                            "embedding": embedding
+                        }
+                        
+                        self.custom_gestures.append(new_sample)
+                        with open(config.CUSTOM_GESTURES_DB, "w") as f:
+                            json.dump(self.custom_gestures, f, indent=4)
+                            
+                        print(f"\n  [Success] Saved custom AI gesture: {label}!")
+                        if cmd:
+                            print(f"            Linked Action Command: {cmd}")
+                        print("=" * 60 + "\n")
+                        
+                        # Draw center expanding green ripple
+                        self.ripples.append({
+                            "pos": (w // 2, h // 2),
+                            "radius": 15,
+                            "color": COLOR_NEON_GREEN,
+                            "max_radius": 150,
+                            "thickness": 6
+                        })
+                        
+                    except Exception as e:
+                        print(f"  [Error] Training failed: {e}")
+                        print("=" * 60 + "\n")
+                else:
+                    print("\n[AI Trainer] No hand detected in camera feed! Hold a hand up and try again.\n")
+
             if key == 27 or key == ord('q') or key == ord('Q'):
                 break
 
@@ -421,6 +489,45 @@ class GestureController:
                 })
         else:
             self.last_hotkey_pressed = None
+
+        # 4. LOCAL AI CUSTOM GESTURE MATCHING (KNN EMBEDDING MATCHING)
+        from config import AI_CLASSIFY_THRESHOLD
+        custom_label, dist = self.classifier.classify_custom_gesture(landmarks, self.custom_gestures, AI_CLASSIFY_THRESHOLD)
+        
+        if custom_label:
+            # Draw glowing green AI Match label on screen above the hand's wrist
+            wx = int(landmarks[0].x * w)
+            wy = int(landmarks[0].y * h) - 25
+            cv2.putText(frame, f"AI MATCH: {custom_label}", (wx - 60, wy), FONT_HUD, 0.45, COLOR_NEON_GREEN, 1, cv2.LINE_AA)
+            
+            # Find the command associated with this label
+            for sample in self.custom_gestures:
+                if sample["label"] == custom_label:
+                    cmd = sample.get("command")
+                    if cmd:
+                        # Limit triggering via cooldown and rising-edge trigger
+                        if (current_time - self.last_hotkey_time > HOTKEY_COOLDOWN) and (self.last_hotkey_pressed != custom_label):
+                            try:
+                                # Non-blocking execution of shell command
+                                subprocess.Popen(cmd, shell=True)
+                                print(f"[AI Action] Executed command linked to {custom_label}: {cmd}")
+                            except Exception as e:
+                                print(f"[Error] Failed to execute custom command: {e}")
+                            
+                            self.last_hotkey_time = current_time
+                            self.last_hotkey_pressed = custom_label
+                            
+                            # Draw custom expanding pink ripple
+                            self.ripples.append({
+                                "pos": (int(landmarks[0].x * w), int(landmarks[0].y * h)),
+                                "radius": 15,
+                                "color": COLOR_MAGENTA,
+                                "max_radius": 100,
+                                "thickness": 4
+                            })
+            # Lock hotkey state tracker to this custom label
+            if self.last_hotkey_pressed != custom_label:
+                self.last_hotkey_pressed = custom_label
 
     def _release_all_clicks(self):
         """Release mouse buttons safely to prevent locking the OS interface."""
