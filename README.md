@@ -1,73 +1,102 @@
-# Webcam Gesture Controller Walkthrough
+<!-- ========================================================================= -->
+<!--                        WEBCAM-GESTURE-CONTROLLER — README                            -->
+<!--       Cyberpunk Premium Theme  |  Animated SVGs  |  Live Badges          -->
+<!-- ========================================================================= -->
 
-Welcome to the upgraded **Webcam Gesture Controller**! This real-time computer vision application tracks up to **two hands concurrently**, mapping intuitive spatial gestures and custom-trained AI shapes to operating system events (mouse navigation, clicking, double-clicking, scrolling, volume control, and custom shell command execution).
+<div align="center">
 
-To prevent tracking interference, the application separates controls into distinct **hand-specific profiles**:
-1. **Right Hand Profile**: Absolute cursor navigation, single clicks, dragging, and double-clicks.
-2. **Left Hand Profile**: Window scrolling, master system volume adjustments, standard keyboard media shortcuts, and custom-trained **Local AI gesture command triggers**!
+<!-- ============================== BANNER ============================== -->
 
----
+<img src="https://capsule-render.vercel.app/api?type=soft&color=0:000000,40:00331A,80:001100,100:000000&height=180&section=header&text=webcam-gesture-controller&fontSize=48&fontColor=00FF88&fontAlignY=38&animation=fadeIn" width="100%"/>
 
-## Workspace Files
+<!-- ============================== TYPING SVG ============================== -->
 
-* [requirements.txt](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/requirements.txt): Third-party libraries (`mediapipe`, `opencv-python`, `pyautogui`, `pycaw`, `numpy`, `comtypes`).
-* [config.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/config.py): Contains active zone bounds, double-click timing windows, hotkey cooldowns, speed-acceleration thresholds, local gestures database filename (`custom_gestures.json`), matching tolerance thresholds (`0.65`), and HUD BGR colors.
-* [filters.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/filters.py): Implements the `AdaptiveEMAFilter` that eliminates coordinate tremors.
-* [gestures.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/gestures.py): Geometry engine to classify hand positions (including Fist, Thumbs-up, OK sign, 63D spatial embedding extraction, and KNN Euclidean classification).
-* [controller.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/controller.py): Visualizes dual-hand skeletons, maps Right/Left hand coordinate pipelines, manages the on-the-fly **`T`** key AI training handler, runs the live KNN matching loops, and executes system triggers.
-* [patch.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/patch.py): Monkeypatch utility ensuring compatibility with Python 3.12+ / 3.13 / 3.14 on Windows.
-* [main.py](file:///C:/Users/Varshan/Documents/antigravity/delightful-nobel/main.py): Clean command-line CLI tool.
+<br/>
 
----
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains%20Mono&weight=500&size=22&duration=3500&pause=800&color=00FF88&center=true&vCenter=true&multiline=true&repeat=true&random=false&width=700&height=80&lines=%3E%20Welcome%20to%20webcam-gesture-controller%20%F0%9F%9A%80;%3E%20Built%20using%20Python%20%7C%20Optimized%20%26%20Secure;%3E%20Cyberpunk%20Premium%20Theme%20Applied.)](https://github.com/VarshuAi/webcam-gesture-controller)
 
-## 🤖 Dynamic Local AI Gesture Classifier
+<br/>
 
-In addition to standard hardcoded poses, CyberHUD includes a **local K-Nearest Neighbors (KNN) Machine Learning classifier** running on-device. You can train new hand shapes on-the-fly, assign a name, and bind them to any operating system command.
+![Version](https://img.shields.io/badge/Version-1.0-00FF88?style=for-the-badge&logo=github&logoColor=black)
+![Language](https://img.shields.io/badge/Python-Tech-00CC66?style=for-the-badge&logo=python&logoColor=black)
+![Status](https://img.shields.io/badge/Status-Active-14354C?style=for-the-badge&logo=git&logoColor=white)
 
-### How it Works (The Math)
-1. **Spatial Embedding ($E \in \mathbb{R}^{63}$)**: Subtracted Wrist coordinates $(x_0, y_0, z_0)$ from all 21 hand joints to ensure *position translation invariance*. Then, divided the coordinates by the palm scale (Wrist-to-Middle-Knuckle distance) to ensure *scale invariance*. This forms a flat 63-dimensional coordinate array representing a unique "pose signature" immune to distance or orientation.
-2. **Euclidean Distance Classification**: When your Left Hand is detected, the classifier calculates the mathematical Euclidean distance against all saved templates:
-   $$D = \sqrt{\sum_{i=1}^{63} (C_i - T_i)^2}$$
-   If the closest distance is below our tolerance threshold (`0.65`), it identifies the custom hand shape.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:000000,40:00331A,80:001100,100:000000&height=60&section=header&text=&fontSize=0" width="100%"/>
 
-### How to Train Poses
-1. Run the controller: `python main.py`
-2. Hold your Left Hand in a custom pose (e.g. "Peace Sign", "Hang Loose", or "Spiderman Web Sign").
-3. Press **`T`** on your keyboard. The camera feed will freeze, and the console will prompt you:
-   * **Gesture Name**: Type a short name (e.g. `YOUTUBE` or `CALC`).
-   * **Action Command**: Type a shell command or URL (e.g. `start https://youtube.com` to open a web page, or `calc.exe` to launch the calculator). Leave blank for a visual HUD-only pose tag.
-4. Press **Enter**. The pose is instantly saved in `custom_gestures.json`, the database reloads, and the tracking feed resumes.
-5. Form that same shape again with your Left Hand to trigger your action!
+</div>
 
----
+<!-- ============================== ABOUT ============================== -->
 
-## 🖐️ Hand-Specific Gesture Vocabulary
+<h2>
+<img src="https://media.giphy.com/media/WUlplcMpOCEmTGBtBW/giphy.gif" width="30">
+<samp>&nbsp;ABOUT</samp>
+</h2>
 
-### 1. Right Hand Controls (Mirrored as "Left Hand" in feed)
-*Handles cursor guidance, clicks, and window dragging.*
+```yaml
+name: webcam-gesture-controller
+version: 1.0
+type: Repository
+author: VarshuAi
+description: >
+  No description available for this project.
+primary_tech: Python
+```
 
-| Gesture | Hand Pose | OS Interaction | Cyber-HUD Overlay |
-| :--- | :--- | :--- | :--- |
-| **Move Cursor** | **Index finger UP**, other fingers closed. | Moves the cursor inside the central active bounds. | Cyan glowing crosshair tracking fingertip. |
-| **Left Click / Drag** | **Pinch Thumb + Index tip** (in Cursor Mode). | Left-click down (pinch-hold to drag-and-drop folders/windows). | Expanding Cyan ripple from pinch location. |
-| **Right Click** | **Pinch Thumb + Middle tip** (in Cursor Mode). | Triggers system right-click. | Expanding Magenta ripple from pinch location. |
-| **Double Click** | **Double Pinch Index + Thumb** within `0.35s`. | Triggers a native OS double-click. | Two rapid Cyan ripples. |
+<!-- ============================== CENTRAL GRAPHIC ============================== -->
 
-### 2. Left Hand Controls (Mirrored as "Right Hand" in feed)
-*Handles scrolling, volume, standard media triggers, and your custom AI commands.*
+<div align="center">
+<br>
+[![Repo Stats](https://github-readme-stats.vercel.app/api/pin/?username=VarshuAi&repo=webcam-gesture-controller&theme=dark&bg_color=000000&title_color=00FF88&icon_color=00FF88&text_color=00CC66)](https://github.com/VarshuAi/webcam-gesture-controller)
+<br>
+</div>
 
-| Gesture | Hand Pose | OS Interaction | Cyber-HUD Overlay |
-| :--- | :--- | :--- | :--- |
-| **Page Scroll** | **Index & Middle UP & Close**, others closed. | Move hand vertically up/down to scroll active pages. | Dual vertical scroll arrows. |
-| **Volume Control** | **Index & Thumb open**, others closed. | Pinch/unpinch distance regulates master system volume. | Pink HUD volume progress bar displaying %. |
-| **Play / Pause** | **Fist Gesture** (all fingers and thumb closed). | Presses keyboard `playpause` key (1.2s cooldown). | Medium glowing green ring. |
-| **Volume Mute** | **Thumbs Up** (vertical thumb extended, others closed). | Toggles master audio mute state (`volumemute`). | Medium glowing green ring. |
-| **Show Desktop** | **OK Sign** (Index + Thumb pinch, other fingers open). | Minimizes all active windows (`Win + D` hotkey). | Medium glowing magenta ring. |
-| **AI Custom Match** | **Your Custom Gesture** trained via `T` key. | Runs custom URL/command asynchronously. | Glowing neon WRIST label: `AI MATCH: NAME`. |
+<!-- ============================== FEATURES ============================== -->
 
----
+<h2>
+<img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&rid=giphy.gif" width="28">
+<samp>&nbsp;FEATURES</samp>
+</h2>
 
-## Setup & Execution
+* **Absolute Mouse Acceleration**: Cursor speed scales dynamically based on hand movement velocity. At slow speeds, a precision dampener (`0.5x`) activates for pixel-perfect targeting. At high speeds, an acceleration multiplier (`2.2x`) activates, allowing you to traverse your monitor with minor wrist motions.
+* **Mirrored Role Handedness**: Because a webcam mirrors your image, a physical Right Hand appears on the left. The software accounts for this, mapping the Right Hand role to mirrored Left labels, ensuring intuitive, natural coordination.
+* **Tactile Cooldown Engine**: Media key bindings are armed with a rising-edge toggle and a `1.2` second cooldown. This ensures that forming a Fist pauses a video *once* rather than spamming play/pause event queues.
+
+<!-- ============================== COMMANDS ============================== -->
+
+<h2>
+<img src="https://media.giphy.com/media/iY8CRBdQXODJSCERIr/giphy.gif" width="28">
+<samp>&nbsp;COMMANDS & USAGE</samp>
+</h2>
+
+```bash
+# Setup virtual environment & run
+python -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
+```
+
+<!-- ============================== TECH STACK ============================== -->
+
+<h2>
+<img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&rid=giphy.gif" width="28">
+<samp>&nbsp;TECH STACK</samp>
+</h2>
+
+<div align="center">
+
+#### `>> SYSTEM INVENTORY`
+![Python](https://img.shields.io/badge/Python-Primary_Language-00FF88?style=for-the-badge&logoColor=black)
+![Git](https://img.shields.io/badge/Git-VCS-00CC66?style=for-the-badge&logo=git&logoColor=white)
+
+</div>
+
+<!-- ============================== SETUP ============================== -->
+
+<h2>
+<img src="https://media.giphy.com/media/LnQjpWaON8nhr21vNW/giphy.gif" width="28">
+<samp>&nbsp;SETUP</samp>
+</h2>
 
 ### 1. Launch the Controller
 ```powershell
@@ -88,8 +117,37 @@ python main.py --no-volume
 
 ---
 
-## Technical Features
+<!-- ============================== STRUCTURE ============================== -->
 
-* **Absolute Mouse Acceleration**: Cursor speed scales dynamically based on hand movement velocity. At slow speeds, a precision dampener (`0.5x`) activates for pixel-perfect targeting. At high speeds, an acceleration multiplier (`2.2x`) activates, allowing you to traverse your monitor with minor wrist motions.
-* **Mirrored Role Handedness**: Because a webcam mirrors your image, a physical Right Hand appears on the left. The software accounts for this, mapping the Right Hand role to mirrored Left labels, ensuring intuitive, natural coordination.
-* **Tactile Cooldown Engine**: Media key bindings are armed with a rising-edge toggle and a `1.2` second cooldown. This ensures that forming a Fist pauses a video *once* rather than spamming play/pause event queues.
+<h2>
+<samp>&nbsp;📁 STRUCTURE</samp>
+</h2>
+
+```
+webcam-gesture-controller/
+├── src/             # Source code entrypoints
+├── docs/            # Project documentation files
+├── README.md        # Interactive readme sheet
+└── LICENSE          # Permission details
+```
+
+<!-- ============================== FOOTER ============================== -->
+
+<div align="center">
+
+<br/>
+
+<img src="https://capsule-render.vercel.app/api?type=soft&color=0:000000,40:00331A,80:001100,100:000000&height=80&section=footer&text=&fontSize=0" width="100%"/>
+
+<br/>
+
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains%20Mono&size=14&duration=4000&pause=1000&color=00FF88&center=true&vCenter=true&width=500&lines=Made+with+%E2%9D%A4%EF%B8%8F+by+VarshuAi;Build+Fast.+Ship+Secure.+Scale+Infinite.)](https://github.com/VarshuAi)
+
+<br/>
+
+[![GitHub](https://img.shields.io/badge/VarshuAi-Profile-00FF88?style=for-the-badge&logo=github&logoColor=black)](https://github.com/VarshuAi)
+[![Repo](https://img.shields.io/badge/webcam-gesture-controller-Repo-00CC66?style=for-the-badge&logo=github&logoColor=black)](https://github.com/VarshuAi/webcam-gesture-controller)
+
+<br/>
+
+</div>
